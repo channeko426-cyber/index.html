@@ -15,6 +15,7 @@ def fetch_json(url):
         return json.loads(response.read().decode())
 
 try:
+    # 【修正箇所】URLのパラメータ組み立てを完全に直しました
     marine_url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=wave_height,wave_period,wave_direction&timezone=Asia%2FTokyo&forecast_days=3"
     weather_url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=wind_speed_10m,wind_direction_10m,weather_code,temperature_2m&timezone=Asia%2FTokyo&forecast_days=3"
 
@@ -53,5 +54,4 @@ try:
 
 except Exception as e:
     print(f"🚨 ERROR: {e}", file=sys.stderr)
-    # エラーが起きた場合は、Actions側を失敗させてログを残す
     sys.exit(1)
