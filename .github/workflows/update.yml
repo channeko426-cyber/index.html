@@ -2,15 +2,14 @@ name: Update Marine Data
 
 on:
   schedule:
-    # 毎時0分（世界標準時）＝日本時間の毎時9分頃に自動実行
     - cron: '0 * * * *'
-  workflow_dispatch: # ボタンを押して手動でいつでも実行できる設定
+  workflow_dispatch:
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # GitHubが自分自身に書き込むための権限
+      contents: write
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -20,9 +19,9 @@ jobs:
       with:
         python-version: '3.10'
 
-    # 【ここを修正！】リポジトリの一番上（トップ層）にある「fetch_data.py」を確実に指定して実行します
+    # 【ここを変更】新しく作ったキャッシュに汚染されていないファイルを直接実行します
     - name: Run data fetch script
-      run: python ./fetch_data.py
+      run: python ./get_sea_weather.py
 
     - name: Commit and Push changes
       run: |
