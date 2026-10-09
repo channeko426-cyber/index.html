@@ -15,14 +15,14 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 【ここを修正しました】正しい公式のPythonセットアップ機能に変更
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
 
+    # 【ここを修正！】リポジトリの一番上（トップ層）にある「fetch_data.py」を確実に指定して実行します
     - name: Run data fetch script
-      run: python fetch_data.py
+      run: python ./fetch_data.py
 
     - name: Commit and Push changes
       run: |
