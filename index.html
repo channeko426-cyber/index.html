@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>糸魚川マイ海天気 (地図連動版)</title>
+    <!-- Leafletの地図スタイルシートを読み込み -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <style>
+        body { font-family: sans-serif; background: #f0f4f8; color: #333; padding: 20px; margin: 0; }
+        .container { max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        h1 { font-size: 1.4rem; text-align: center; color: #006699; margin-top: 0; }
+        .spot-info { text-align: center; font-size: 0.85rem; color: #666; margin-bottom: 20px; }
+        
+        /* 地図エリアのスタイリング */
+        #map { width: 100%; height: 250px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #ccc; z-index: 1; }
+
+        /* シークバーエリア */
+        .seek-container { background: #e6f2ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; }
+        .time-display { font-size: 1.3rem; font-weight: bold; color: #004466; margin-bottom: 10px; }
+        .now-badge { background: #ff3b30; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; vertical-align: middle; margin-left: 5px; }
+        .slider { width: 100%; margin: 10px 0; cursor: pointer; }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 0.8rem; color: #555; }
+
+        /* データ表示エリア */
+        .weather-card { border-left: 5px solid #006699; background: #f9f9f9; padding: 15px; margin-bottom: 12px; border-radius: 4px; }
+        .weather-card.wind { border-left-color: #009966; }
+        h3 { margin: 0 0 15px 0; font-size: 1.05rem; color: #444; }
+        .param { margin: 10px 0; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; }
+        .value { font-weight: bold; color: #111; font-size: 1.2rem; }
+
+        .wind-visual-box { display: flex; align-items: center; gap: 15px; }
+        .wind-arrow { transition: transform 0.2s, stroke-width 0.2s; transform-origin: center; width: 40px; height: 40px; }
+        .loading { text-align: center; color: #888; padding: 4px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>糸魚川マイ海天気</h1>
+    <div class="spot-info">対象エリア: 能生漁港沖 (37.11°N, 138.00°E)</div>
+    
+    <div id="loading" class="loading">48時間予測データ・地図を読み込み中...</div>
+    
+    <div id="app-content" style="display:none;">
+        <!-- 【新機能】波の高さを色で可視化するマップ -->
+        <div id="map"></div>
+
+        <!-- 時間シークバー -->
+        <div class="seek-container">
+            <div class="time-display">
+                <span id="target-time">----/--/-- --:--</span>
+                <span id="now-badge" class="now-badge" style="display:none;">現在</span>
+            </div>
+            <input type="range" id="time-slider" class="slider" min="0" max="48" value="0">
+            <div class="slider-labels">
+                <span>現在</span>
+                <span>24時間後</span>
+                <span>48時間後</span>
+            </div>
+        </div>
+
+        <!-- 波コンディション -->
+        <div class="weather-card">
+            <h3>🌊 波コンディション</h3>
+            <div class="param"><span>波の高さ (波高):</span> <span class="value"><span id="wave-height">-</span> m</span></div>
+            <div class="param"><span>波の周期:</span> <span class="value"><span id="wave-period">-</span> 秒</span></div>
+            <div class="param"><span>波の届く向き (波向):</span> <span class="value" id="wave-dir">-</span></div>
+        </div>
+
+        <!-- 風と天気 -->
+        <div class="weather-card wind">
+            <h3>💨 風・天気・気温</h3>
+            <div class="param"><span>天気 / 気温:</span> <span class="value"><span id="weather-text">-</span> / <span id="temperature">-</span> ℃</span></div>
+            <div class="param">
+                <span>風速・風向:</span> 
+                <div class="wind-visual-box">
+                    <svg id="wind-arrow-svg" class="wind-arrow" viewBox="0 0 24 24" fill="none" stroke="#009966" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                    <span class="value"><span id="wind-speed">-</span> m/s (<span id="wind-dir">-</span>)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leafletの地図スクリプトを読み込み -->
+<script src="https://unpkg.com"></script>
+<script>
+const LAT = 37.11;
+const LON = 138.00;
+
+let hourlyData = []; 
+let startIndex = 0;  
+let map, waveLayer; // 地図オブジェクトと波の色を塗るレイヤー
+
+// 地図の初期化関数
+function initMap() {
+    // 糸魚川周辺を中心に地図を作成
+    map = L.map('map').setView([LAT + 0.05, LON], 11);
+
+    // 国土地理院の標準地図タイル（シンプルで見やすい）をセット
+    L.tileLayer('https://gsi.go.jp{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://gsi.go.jp">国土地理院</a>'
+    }).addTo(map);
+
+    // 海の上に波の高さを表す透過サークル（半径5km）を初期配置
+    waveLayer = L.circle([LAT, LON], {
+        radius: 5000,
+        fillOpacity: 0.5, // 50%透過して下の地図が見えるようにする
+        weight: 2,
+        color: '#00a2ff'
+    }).addTo(map);
+}
+
+function getDirection(degree) {
+    if (degree === undefined || degree === null) return '-';
+    const sectors = ['北', '北北東', '北東', '東北東', '東', '東南東', '南東', '南南東', '南', '南南西', '南西', '西南西', '西', '西北西', '北西', '北北西'];
+    const index = Math.round(degree / 22.5) % 16;
+    return sectors[index];
+}
+
+function getWeatherText(code) {
+    if (code === 0) return "☀️ 晴れ";
+    if (.includes(code)) return "⛅ 曇り・晴れ";
+    if (.includes(code)) return "🌫️ 霧";
+    if (.includes(code)) return "☔ 雨";
+    if (.includes(code)) return "❄️ 雪";
+    if (.includes(code)) return "⚡ 雷雨";
+    return "☁️ 曇り";
+}
+
+// 波の高さに対応するカラーコードを返す
+function getWaveColor(height) {
+    if (height === null || height === undefined) return '#888888';
+    if (height < 0.5) return '#00a2ff'; // ベタ凪：ライトブルー
+    if (height < 1.0) return '#0055ff'; // 普通：ブルー
+    if (height < 1.5) return '#ffd000'; // 注意：黄色
+    if (height < 2.5) return '#ff8800'; // 警戒：オレンジ
+    return '#ff3330'; // 危険：赤
+}
+
+function updateDisplay(offsetHours) {
+    const targetIndex = startIndex + parseInt(offsetHours);
+    const data = hourlyData[targetIndex];
+    if (!data) return;
+
+    // 日時表示
+    const date = new Date(data.time);
+    const timeStr = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:00`;
+    document.getElementById('target-time').innerText = timeStr;
+
+    document.getElementById('now-badge').style.display = (parseInt(offsetHours) === 0) ? 'inline-block' : 'none';
+
+    // 1. 波データの更新
+    const hHeight = data.wave_height;
+    document.getElementById('wave-height').innerText = hHeight !== null ? hHeight.toFixed(2) : '-';
+    document.getElementById('wave-period').innerText = data.wave_period !== null ? data.wave_period.toFixed(1) : '-';
+    document.getElementById('wave-dir').innerText = getDirection(data.wave_direction);
+    
+    // 【新機能】地図上のサークルの色と枠線の色を波の高さでリアルタイム書き換え
+    if (waveLayer) {
+        const nextColor = getWaveColor(hHeight);
+        waveLayer.setStyle({
+            fillColor: nextColor,
+            color: nextColor
+        });
+    }
+
+    // 2. 天気・気温の更新
+    document.getElementById('weather-text').innerText = getWeatherText(data.weather_code);
+    document.getElementById('temperature').innerText = data.temperature !== null ? data.temperature.toFixed(1) : '-';
+    
+    // 3. 風データの更新
+    const windSpeedMs = data.wind_speed !== null ? (data.wind_speed / 3.6) : null;
+    document.getElementById('wind-speed').innerText = windSpeedMs !== null ? windSpeedMs.toFixed(1) : '-';
+    document.getElementById('wind-dir').innerText = getDirection(data.wind_direction);
+
+    // 風矢印の制御
+    const arrowSvg = document.getElementById('wind-arrow-svg');
+    if (data.wind_direction !== null && windSpeedMs !== null) {
+        const rotateAngle = (data.wind_direction + 180) % 360;
+        arrowSvg.style.transform = `rotate(${rotateAngle}deg)`;
+        const strokeWidth = Math.min(Math.max(1.5, windSpeedMs * 0.4), 5.0);
+        arrowSvg.style.strokeWidth = strokeWidth;
+        arrowSvg.style.display = 'block';
+    } else {
+        arrowSvg.style.display = 'none';
+    }
+}
+
+async function initApp() {
+    try {
+        const marineUrl = `https://open-meteo.com{LAT}&longitude=${LON}&hourly=wave_height,wave_period,wave_direction&timezone=Asia%2FTokyo&forecast_days=3`;
+        const weatherUrl = `https://open-meteo.com{LAT}&longitude=${LON}&hourly=wind_speed_10m,wind_direction_10m,weather_code,temperature_2m&timezone=Asia%2FTokyo&forecast_days=3`;
+
+        const [marineRes, weatherRes] = await Promise.all([
+            fetch(marineUrl).then(r => r.json()),
+            fetch(weatherUrl).then(r => r.json())
+        ]);
+
+        const times = marineRes.hourly.time;
+        const now = new Date();
+
+        let minDiff = Infinity;
+        for (let i = 0; i < times.length; i++) {
+            const t = new Date(times[i]);
+            const diff = Math.abs(t - now);
+            if (diff < minDiff) {
+                minDiff = diff;
+                startIndex = i;
+            }
+            
+            hourlyData.push({
+                time: times[i],
+                wave_height: marineRes.hourly.wave_height[i],
+                wave_period: marineRes.hourly.wave_period[i],
+                wave_direction: marineRes.hourly.wave_direction[i],
+                wind_speed: weatherRes.hourly.wind_speed_10m[i],
+                wind_direction: weatherRes.hourly.wind_direction_10m[i],
+                weather_code: weatherRes.hourly.weather_code[i],
+                temperature: weatherRes.hourly.temperature_2m[i]
+            });
+        }
+
+        document.getElementById('loading').style.display = 'none';
