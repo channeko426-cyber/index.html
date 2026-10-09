@@ -1,0 +1,30 @@
+name: Update Marine Data
+
+on:
+  schedule:
+    # 毎時0分（世界標準時）＝日本時間の毎時9分頃に自動実行
+    - cron: '0 * * * *'
+  workflow_dispatch: # ボタンを押して手動でいつでも実行できる設定
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # GitHubが自分自身に書き込むための権限
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/create-python-environment@v1 # 正しい標準アクションを使用
+
+    - name: Run data fetch script
+      run: python fetch_data.py
+
+    - name: Commit and Push changes
+      run: |
+        git config --local user.email "github-actions[bot]@://github.com"
+        git config --local user.name "github-actions[bot]"
+        git add data.json
+        git diff-index --quiet HEAD || git commit -m "Auto-update marine data"
+        git push
