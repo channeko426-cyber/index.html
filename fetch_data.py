@@ -1,20 +1,28 @@
 import json
 import urllib.request
+import sys
 from datetime import datetime, timedelta
 
 LAT, LON = 37.11, 138.00
 
 def fetch_json(url):
-    with urllib.request.urlopen(url) as response:
+    print(f"Fetching: {url}")
+    req = urllib.request.Request(
+        url, 
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+    )
+    with urllib.request.urlopen(req, timeout=15) as response:
         return json.loads(response.read().decode())
 
 try:
-    # 3日分のデータを取得
     marine_url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=wave_height,wave_period,wave_direction&timezone=Asia%2FTokyo&forecast_days=3"
     weather_url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=wind_speed_10m,wind_direction_10m,weather_code,temperature_2m&timezone=Asia%2FTokyo&forecast_days=3"
 
     m_data = fetch_json(marine_url)
+    print("Marine data fetched successfully.")
+    
     w_data = fetch_json(weather_url)
+    print("Weather data fetched successfully.")
 
     times = m_data["hourly"]["time"]
     hourly_list = []
@@ -41,7 +49,9 @@ try:
 
     with open("data.json", "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
-    print("Data file generated successfully!")
+    print("Success: data.json has been created!")
 
 except Exception as e:
-    print(f"Error occurred: {e}")
+    print(f"🚨 ERROR: {e}", file=sys.stderr)
+    # エラーが起きた場合は、Actions側を失敗させてログを残す
+    sys.exit(1)
