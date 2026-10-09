@@ -14,14 +14,31 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    # 【ここを変更】新しく作ったキャッシュに汚染されていないファイルを直接実行します
-    - name: Run data fetch script
-      run: python ./get_sea_weather.py
+    # Pythonファイルを使わず、ここで直接正しいURLからデータを取得して「data.json」を作ります
+    - name: Fetch and Generate data.json
+      run: |
+        curl -s "https://open-meteo.com" > marine.json
+        curl -s "https://open-meteo.com" > weather.json
+        
+        # 2つのデータを合体させて正しい形式のdata.jsonを出力するJavaScriptを実行
+        node -e '
+          const fs = require("fs");
+          const m = JSON.parse(fs.readFileSync("marine.json"));
+          const w = JSON.parse(fs.readFileSync("weather.json"));
+          const times = m.hourly.time;
+          const hourly_data = times.map((t, i) => ({
+            time: t,
+            wave_height: m.hourly.wave_height[i],
+            wave_period: m.hourly.wave_period[i],
+            wave_direction: m.hourly.wave_direction[i],
+            wind_speed: w.hourly.wind_speed_10m[i],
+            wind_direction: w.hourly.wind_direction_10m[i],
+            weather_code: w.hourly.weather_code[i],
+            temperature: w.hourly.temperature_2m[i]
+          }));
+          const jstNow = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().replace("T", " ").substring(0, 16).replace(/-/g, "/");
+          fs.writeFileSync("data.json", JSON.stringify({ updated_at: jstNow, hourly_data }, null, 2));
+        '
 
     - name: Commit and Push changes
       run: |
