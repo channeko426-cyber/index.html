@@ -15,8 +15,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    # 【ここを修正しました】正しい公式のPythonセットアップ機能に変更
     - name: Set up Python
-      uses: actions/create-python-environment@v1 # 正しい標準アクションを使用
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
     - name: Run data fetch script
       run: python fetch_data.py
