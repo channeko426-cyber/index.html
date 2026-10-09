@@ -3,8 +3,6 @@ import urllib.request
 import sys
 from datetime import datetime, timedelta
 
-LAT, LON = 37.11, 138.00
-
 def fetch_json(url):
     print(f"Fetching: {url}")
     req = urllib.request.Request(
@@ -15,9 +13,9 @@ def fetch_json(url):
         return json.loads(response.read().decode())
 
 try:
-    # 完全にパラメータが正しく分離された正しいURLです
-    marine_url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=wave_height,wave_period,wave_direction&timezone=Asia%2FTokyo&forecast_days=3"
-    weather_url = f"https://open-meteo.com{LAT}&longitude={LON}&hourly=wind_speed_10m,wind_direction_10m,weather_code,temperature_2m&timezone=Asia%2FTokyo&forecast_days=3"
+    # 完全に完成したURLをそのままセット（詰まる余地をなくしました）
+    marine_url = "https://open-meteo.com"
+    weather_url = "https://open-meteo.com"
 
     m_data = fetch_json(marine_url)
     print("Marine data fetched successfully.")
@@ -40,7 +38,6 @@ try:
             "temperature": w_data["hourly"]["temperature_2m"][i]
         })
 
-    # 日本の現在時刻を記録
     jst_now = (datetime.utcnow() + timedelta(hours=9)).strftime("%Y/%m/%d %H:%M")
 
     output = {
